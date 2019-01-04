@@ -53,11 +53,13 @@ class BinanceClientFactory(WebSocketClientFactory, BinanceReconnectingClientFact
     protocol = BinanceClientProtocol
     _max_reconnect_error_payload = {
         'e': 'error',
+        't': 'reconn',
         'm': 'Max reconnect retries reached'
     }
 
     _reconnect_error_payload = {
         'e': 'error',
+        't': 'critical',
         'm': 'Websocket failed, reconnect'
     }
 
