@@ -39,26 +39,35 @@ class BinanceReconnectingClientFactory(ReconnectingClientFactory):
 
     maxDelay = 10
 
-    maxRetries = 5
+    maxRetries = 20
 
 
 class BinanceClientFactory(WebSocketClientFactory, BinanceReconnectingClientFactory):
 
     protocol = BinanceClientProtocol
-    _reconnect_error_payload = {
+    _max_reconnect_error_payload = {
         'e': 'error',
         'm': 'Max reconnect retries reached'
     }
 
+    _reconnect_error_payload = {
+        'e': 'error',
+        'm': 'Websocket failed, reconnect'
+    }
+
     def clientConnectionFailed(self, connector, reason):
         self.retry(connector)
+        self.callback(self._reconnect_error_payload)
+
         if self.retries > self.maxRetries:
-            self.callback(self._reconnect_error_payload)
+            self.callback(self._max_reconnect_error_payload)
 
     def clientConnectionLost(self, connector, reason):
         self.retry(connector)
+        self.callback(self._reconnect_error_payload)
+
         if self.retries > self.maxRetries:
-            self.callback(self._reconnect_error_payload)
+            self.callback(self._max_reconnect_error_payload)
 
 
 class BinanceSocketManager(threading.Thread):
@@ -70,14 +79,25 @@ class BinanceSocketManager(threading.Thread):
     WEBSOCKET_DEPTH_20 = '20'
 
     DEFAULT_USER_TIMEOUT = 30 * 60  # 30 minutes
+    DEFAULT_PING_INTERVAL = 5  # 5 seconds
+    DEFAULT_PING_TIMEOUT = 5  # 5 seconds
 
-    def __init__(self, client, user_timeout=DEFAULT_USER_TIMEOUT):
+    def __init__(
+            self, client,
+            user_timeout=DEFAULT_USER_TIMEOUT,
+            ping_interval=DEFAULT_PING_INTERVAL,
+            ping_timeout=DEFAULT_PING_TIMEOUT
+    ):
         """Initialise the BinanceSocketManager
 
         :param client: Binance API client
         :type client: binance.Client
         :param user_timeout: Custom websocket timeout
         :type user_timeout: int
+        :param ping_interval: Custom ping pong interval
+        :type ping_interval: int
+        :param ping_timeout: Custom ping pong timeout
+        :type ping_timeout: int
 
         """
         threading.Thread.__init__(self)
@@ -87,6 +107,8 @@ class BinanceSocketManager(threading.Thread):
         self._user_callback = None
         self._client = client
         self._user_timeout = user_timeout
+        self._ping_interval = ping_interval
+        self._ping_timeout = ping_timeout
 
     def _start_socket(self, path, callback, prefix='ws/'):
         if path in self._conns:
@@ -97,6 +119,12 @@ class BinanceSocketManager(threading.Thread):
         factory.protocol = BinanceClientProtocol
         factory.callback = callback
         factory.reconnect = True
+
+        # add ping pong
+        if self._ping_interval is not None and self._ping_timeout is not None:
+            factory.autoPingInterval = self._ping_interval
+            factory.autoPingTimeout = self._ping_timeout
+
         context_factory = ssl.ClientContextFactory()
 
         self._conns[path] = connectWS(factory, context_factory)
