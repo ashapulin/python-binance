@@ -21,15 +21,21 @@ class BinanceClientProtocol(WebSocketClientProtocol):
     def onConnect(self, response):
         # reset the delay after reconnecting
         self.factory.resetDelay()
+        self.factory.callback({'e': 'info', 't': 'conn', 'm': 'connect to server', 'p': response.peer})
+
+    def onOpen(self):
+        self.factory.callback({'e': 'info', 't': 'open', 'm': 'open connection', 'u': self.factory.url})
+
+    def onClose(self, wasClean, code, reason):
+        self.factory.callback({'e': 'info', 't': 'close', 'm': 'close connection', 'c': code, 'r': reason})
 
     def onMessage(self, payload, isBinary):
-        if not isBinary:
-            try:
-                payload_obj = json.loads(payload.decode('utf8'))
-            except ValueError:
-                pass
-            else:
-                self.factory.callback(payload_obj)
+        try:
+            payload_obj = json.loads(payload.decode('utf8'))
+        except ValueError as err:
+            print(err)
+        else:
+            self.factory.callback(payload_obj)
 
 
 class BinanceReconnectingClientFactory(ReconnectingClientFactory):
