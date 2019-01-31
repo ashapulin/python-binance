@@ -561,3 +561,10 @@ class BinanceSocketManager(threading.Thread):
             self.stop_socket(key)
 
         self._conns = {}
+
+    def stop(self):
+        """
+        Stop websockets thread
+        """
+        if reactor.running:
+            reactor.stop()
